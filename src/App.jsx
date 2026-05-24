@@ -6,6 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import BookingModal from './components/BookingModal'
 import AdminPanel from './components/AdminPanel'
 import { DEFAULT_SERVICES } from './constants/services'
+import { DEFAULT_CUSTOMERS } from './constants/customers'
 
 function App() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -16,17 +17,16 @@ function App() {
   const [services, setServices] = useState(DEFAULT_SERVICES)
   const [bookings, setBookings] = useState([])
   const [selectedBooking, setSelectedBooking] = useState(null)
+  const [customers, setCustomers] = useState(DEFAULT_CUSTOMERS)
 
-  // Skapa ny bokning (klick/markering i tom kalender)
   const handleDateSelect = (selectInfo) => {
     setSelectedBooking(null)
     setSelectedStart(selectInfo.startStr)
     setSelectedEnd(selectInfo.endStr)
-    setCustomerName('')
+    setCustomerName(Object.keys(customers)[0] || '')
     setModalOpen(true)
   }
 
-  // Klick på en befintlig bokning för att öppna fönstret
   const handleEventClick = (clickInfo) => {
     const bookingId = clickInfo.event.id
     const foundBooking = bookings.find(b => b.id === bookingId)
@@ -35,78 +35,65 @@ function App() {
       setSelectedBooking(foundBooking)
       setSelectedStart(foundBooking.start)
       setSelectedEnd(foundBooking.end)
-      const namePart = foundBooking.title.split(' - ')[0]
-      setCustomerName(namePart)
+      setCustomerName(foundBooking.extendedProps.customerId)
       setModalOpen(true)
     }
   }
 
-  // NYTT: Sparar tidsändringar om man drar/flyttar en ruta direkt i kalendern
   const handleEventDrop = (dropInfo) => {
     const updatedBookings = bookings.map(b => {
       if (b.id === dropInfo.event.id) {
-        return {
-          ...b,
-          start: dropInfo.event.startStr,
-          end: dropInfo.event.endStr
-        }
+        return { ...b, start: dropInfo.event.startStr, end: dropInfo.event.endStr }
       }
       return b
     })
     setBookings(updatedBookings)
   }
 
-  // NYTT: Sparar tidsändringar om man drar i botten av en ruta i kalendern för att ändra längden
   const handleEventResize = (resizeInfo) => {
     const updatedBookings = bookings.map(b => {
       if (b.id === resizeInfo.event.id) {
-        return {
-          ...b,
-          start: resizeInfo.event.startStr,
-          end: resizeInfo.event.endStr
-        }
+        return { ...b, start: resizeInfo.event.startStr, end: resizeInfo.event.endStr }
       }
       return b
     })
     setBookings(updatedBookings)
   }
 
-  // Spara bokning via fönstret (Nu sparar vi även selectedStart och selectedEnd om de ändrats i formuläret!)
-  const handleSaveBooking = (e, serviceName, finalPrice) => {
+  const handleSaveBooking = (e, serviceName, finalPrice, customerId) => {
     e.preventDefault()
     
+    const currentCustomer = customers[customerId]
+    const displayTitle = currentCustomer ? `${currentCustomer.name} - ${serviceName}` : `Okänd - ${serviceName}`
+    
     if (selectedBooking) {
-      // UPPDATERA BEFINTLIG BOKNING
       const updatedBookings = bookings.map(b => {
         if (b.id === selectedBooking.id) {
           return {
             ...b,
-            title: `${customerName} - ${serviceName}`,
-            start: selectedStart, // Sparar manuellt ändrad tid från fönstret
-            end: selectedEnd,     // Sparar manuellt ändrad tid från fönstret
-            extendedProps: { price: finalPrice, rutPrice: finalPrice * 0.5 }
+            title: displayTitle,
+            start: selectedStart,
+            end: selectedEnd,
+            extendedProps: { customerId: customerId, price: finalPrice, rutPrice: finalPrice * 0.5 }
           }
         }
         return b
       })
       setBookings(updatedBookings)
     } else {
-      // SKAPA HELT NY BOKNING
       const newBooking = {
         id: String(Date.now()),
-        title: `${customerName} - ${serviceName}`,
+        title: displayTitle,
         start: selectedStart,
         end: selectedEnd,
         backgroundColor: '#2ecc71',
         borderColor: '#27ae60',
-        extendedProps: { price: finalPrice, rutPrice: finalPrice * 0.5 }
+        extendedProps: { customerId: customerId, price: finalPrice, rutPrice: finalPrice * 0.5 }
       }
       setBookings([...bookings, newBooking])
     }
 
     setModalOpen(false)
-    setCustomerName('')
-    setSelectedBooking(null)
   }
 
   const handleDeleteBooking = () => {
@@ -119,7 +106,6 @@ function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', width: '100%', boxSizing: 'border-box' }}>
-      
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #eaeded', paddingBottom: '15px' }}>
         <div>
           <h1 style={{ margin: 0, color: '#2c3e50', fontSize: '26px' }}>SmartField-Scheduler 🌿</h1>
@@ -134,11 +120,7 @@ function App() {
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          }}
+          headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }}
           locale="sv"
           slotMinTime="06:00"
           slotMaxTime="20:00"
@@ -148,8 +130,8 @@ function App() {
           firstDay={1}
           select={handleDateSelect}
           eventClick={handleEventClick}
-          eventDrop={handleEventDrop}     // NYTT: Lyssnar på när man flyttar pass i kalendern
-          eventResize={handleEventResize} // NYTT: Lyssnar på när man ändrar storlek i kalendern
+          eventDrop={handleEventDrop}     
+          eventResize={handleEventResize} 
           events={bookings}
           height="auto" 
         />
@@ -162,13 +144,15 @@ function App() {
         onClose={() => { setModalOpen(false); setSelectedBooking(null); }}
         onSave={handleSaveBooking}
         onDelete={handleDeleteBooking}
-        customerName={customerName}
-        setCustomerName={setCustomerName}
+        customerName={customerName}       
+        setCustomerName={setCustomerName}   
         startTime={selectedStart}
-        setStartTime={setSelectedStart} // NYTT: Skicka med funktion för att ändra starttid
+        setStartTime={setSelectedStart} 
         endTime={selectedEnd}
-        setEndTime={setSelectedEnd}     // NYTT: Skicka med funktion för att ändra sluttid
+        setEndTime={setSelectedEnd}     
         services={services} 
+        customers={customers}               
+        setCustomers={setCustomers}         
         isEditing={!!selectedBooking}
       />
     </div>
