@@ -1,10 +1,43 @@
-import React from 'react'
+import React, { useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import BookingModal from './components/BookingModal'
+
+// IMPORTERAR STANDARDTJÄNSTERNA 
+import { DEFAULT_SERVICES } from './constants/services'
 
 function App() {
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedStart, setSelectedStart] = useState('')
+  const [selectedEnd, setSelectedEnd] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  
+  // Lägger tjänsterna i ett State! 
+  // Detta gör att vi i framtiden kan lägga till/ta bort tjänster live i appen.
+  const [services, setServices] = useState(DEFAULT_SERVICES)
+
+  const handleDateSelect = (selectInfo) => {
+    setSelectedStart(selectInfo.startStr)
+    setSelectedEnd(selectInfo.endStr)
+    setModalOpen(true)
+  }
+
+  const handleSaveBooking = (e, serviceName, finalPrice) => {
+    e.preventDefault()
+    console.log('Bokning sparad i systemet:', {
+      kund: customerName,
+      tjänst: serviceName,
+      start: selectedStart,
+      slut: selectedEnd,
+      totalPris: finalPrice,
+      rutPris: finalPrice * 0.5
+    })
+    setModalOpen(false)
+    setCustomerName('')
+  }
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       <header style={{ marginBottom: '20px' }}>
@@ -21,15 +54,28 @@ function App() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
-          locale="sv" // Gör kalendern svensk (dagar, månader etc.)
-          slotMinTime="06:00" // Kalendern startar kl 06:00 på morgonen
-          slotMaxTime="20:00" // Kalendern slutar kl 20:00 på kvällen
-          allDaySlot={false} // Tar bort "Hela dagen"-fältet för att spara skärmutrymme
+          locale="sv"
+          slotMinTime="06:00"
+          slotMaxTime="20:00"
+          allDaySlot={false}
           editable={true}
           selectable={true}
-          firstDay={1} // Sätter måndag som veckans första dag
+          firstDay={1}
+          select={handleDateSelect}
         />
       </div>
+
+      {/* SKICKAR MED SERVICES TILL MODALEN HÄR */}
+      <BookingModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSaveBooking}
+        customerName={customerName}
+        setCustomerName={setCustomerName}
+        startTime={selectedStart}
+        endTime={selectedEnd}
+        services={services} 
+      />
     </div>
   )
 }
