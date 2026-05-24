@@ -1,20 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import CustomerForm from './CustomerForm' // NYTT: Importera underkomponenten!
 
 function BookingModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  onDelete, 
-  customerName,       // Detta är valt customerId (t.ex. 'customer_1')
-  setCustomerName,   
-  startTime, 
-  setStartTime, 
-  endTime, 
-  setEndTime,   
-  services,
-  customers,
-  setCustomers,
-  isEditing 
+  isOpen, onClose, onSave, onDelete, 
+  customerName, setCustomerName,   
+  startTime, setStartTime, 
+  endTime, setEndTime,   
+  services, customers, setCustomers, isEditing 
 }) {
   const [selectedService, setSelectedService] = useState(Object.keys(services)[0])
   const [calculatedPrice, setCalculatedPrice] = useState(0)
@@ -28,17 +20,15 @@ function BookingModal({
   const [newCustomerZip, setNewCustomerZip] = useState('')
   const [newCustomerCity, setNewCustomerCity] = useState('')
 
-  // State för att redigera en BEFINTLIG kunds uppgifter direkt i fönstret
+  // States för att redigera en befintlig kund
   const [isEditingExistingCustomer, setIsEditingExistingCustomer] = useState(false)
   const [editPhone, setEditPhone] = useState('')
   const [editStreet, setEditStreet] = useState('')
   const [editZip, setEditZip] = useState('')
   const [editCity, setEditCity] = useState('')
 
-  // Hämta den aktiva kunden baserat på valt ID
   const activeCustomer = customers[customerName]
 
-  // Synka redigeringsfälten när man väljer en kund eller går in i ändra-läge
   useEffect(() => {
     if (activeCustomer) {
       setEditPhone(activeCustomer.phone || '')
@@ -49,7 +39,6 @@ function BookingModal({
     setIsEditingExistingCustomer(false)
   }, [customerName, isOpen, customers])
 
-  // Nollställ "Ny kund"-formuläret vid stängning
   useEffect(() => {
     if (!isOpen) {
       setIsCreatingNewCustomer(false)
@@ -69,9 +58,7 @@ function BookingModal({
       const diffInHours = diffInMs / (1000 * 60 * 60)
       const finalHours = diffInHours > 0 ? diffInHours : 0
       setHours(finalHours)
-
-      const rate = services[selectedService].hourlyRate
-      setCalculatedPrice(finalHours * rate)
+      setCalculatedPrice(finalHours * services[selectedService].hourlyRate)
     }
   }, [startTime, endTime, selectedService, services])
 
@@ -85,24 +72,16 @@ function BookingModal({
   const handleTimeChange = (newTimeStr, isStart) => {
     const currentDateTimeStr = isStart ? startTime : endTime
     if (!currentDateTimeStr) return
-    const datePart = currentDateTimeStr.split('T')[0]
-    const updatedDateTimeStr = `${datePart}T${newTimeStr}:00`
-    if (isStart) setStartTime(updatedDateTimeStr)
-    else setEndTime(updatedDateTimeStr)
+    const updated = `${currentDateTimeStr.split('T')[0]}T${newTimeStr}:00`
+    if (isStart) setStartTime(updated)
+    else setEndTime(updated)
   }
 
-  // Sparar ändringar på en befintlig kunds kontaktuppgifter
   const handleUpdateCustomerDetails = () => {
     if (!customerName) return
     setCustomers({
       ...customers,
-      [customerName]: {
-        ...customers[customerName],
-        phone: editPhone,
-        street: editStreet,
-        zip: editZip,
-        city: editCity
-      }
+      [customerName]: { ...customers[customerName], phone: editPhone, street: editStreet, zip: editZip, city: editCity }
     })
     setIsEditingExistingCustomer(false)
   }
@@ -111,21 +90,13 @@ function BookingModal({
     e.preventDefault()
     let finalCustomerId = customerName
 
-    // Om man väljer att skapa en helt ny kund (oavsett om det är nybokning eller redigering)
     if (isCreatingNewCustomer) {
       finalCustomerId = 'customer_' + Date.now()
       setCustomers({
         ...customers,
-        [finalCustomerId]: {
-          name: newCustomerName,
-          phone: newCustomerPhone,
-          street: newCustomerStreet,
-          zip: newCustomerZip,
-          city: newCustomerCity
-        }
+        [finalCustomerId]: { name: newCustomerName, phone: newCustomerPhone, street: newCustomerStreet, zip: newCustomerZip, city: newCustomerCity }
       })
     }
-
     onSave(e, services[selectedService].name, calculatedPrice, finalCustomerId)
   }
 
@@ -137,19 +108,14 @@ function BookingModal({
         </h3>
         
         <form onSubmit={handleSubmit}>
-          
-          {/* KUNDVÄLJARE (Nu med "+ Lägg till ny kund..." tillgängligt ALLTID) */}
+          {/* KUNDVÄLJARE */}
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Välj kund:</label>
             <select
               value={isCreatingNewCustomer ? 'new' : customerName}
               onChange={(e) => {
-                if (e.target.value === 'new') {
-                  setIsCreatingNewCustomer(true)
-                } else {
-                  setIsCreatingNewCustomer(false)
-                  setCustomerName(e.target.value)
-                }
+                if (e.target.value === 'new') setIsCreatingNewCustomer(true)
+                else { setIsCreatingNewCustomer(false); setCustomerName(e.target.value); }
               }}
               style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #bdc3c7', background: '#fff', fontSize: '15px' }}
             >
@@ -160,7 +126,7 @@ function BookingModal({
             </select>
           </div>
 
-          {/* VISA OCH REDIGERA KONTAKTUPPGIFTER FÖR VALD KUND (Döljs om vi skapar en ny) */}
+          {/* INFOBOX FÖR AKTIV KUND */}
           {!isCreatingNewCustomer && activeCustomer && (
             <div style={{ background: '#f4f6f7', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px', borderLeft: '4px solid #7f8c8d' }}>
               {!isEditingExistingCustomer ? (
@@ -189,24 +155,15 @@ function BookingModal({
             </div>
           )}
 
-          {/* FORMULÄR FÖR NY KUND */}
+          {/* FORMULÄR FÖR NY KUND (Nu utbruten till en egen snygg komponent!) */}
           {isCreatingNewCustomer && (
-            <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '6px', marginBottom: '15px', borderLeft: '4px solid #3498db' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#2980b9' }}>Personuppgifter (GDPR-säkrad lagring) 🔒</h4>
-              <div style={{ marginBottom: '10px' }}>
-                <input type="text" placeholder="Fullständigt namn" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} required style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
-              </div>
-              <div style={{ marginBottom: '10px' }}>
-                <input type="tel" placeholder="Telefonnummer" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} required style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
-              </div>
-              <div style={{ marginBottom: '10px' }}>
-                <input type="text" placeholder="Gatuadress (t.ex. Åsgatan 4)" value={newCustomerStreet} onChange={(e) => setNewCustomerStreet(e.target.value)} required style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="text" placeholder="Postnummer" value={newCustomerZip} onChange={(e) => setNewCustomerZip(e.target.value)} required style={{ flex: 1, padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
-                <input type="text" placeholder="Ort" value={newCustomerCity} onChange={(e) => setNewCustomerCity(e.target.value)} required style={{ flex: 1, padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
-              </div>
-            </div>
+            <CustomerForm 
+              name={newCustomerName} setName={setNewCustomerName}
+              phone={newCustomerPhone} setPhone={setNewCustomerPhone}
+              street={newCustomerStreet} setStreet={setNewCustomerStreet}
+              zip={newCustomerZip} setZip={setNewCustomerZip}
+              city={newCustomerCity} setCity={setNewCustomerCity}
+            />
           )}
 
           {/* TIDSHANTERING */}
