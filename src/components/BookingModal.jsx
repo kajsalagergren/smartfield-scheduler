@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react'
-import CustomerForm from './CustomerForm' // NYTT: Importera underkomponenten!
+import React, { useState, useEffect, useCallback } from 'react'
+import CustomerForm from './CustomerForm'
+import TaskForm from './TaskForm'
 
 function BookingModal({ 
   isOpen, onClose, onSave, onDelete, 
   customerName, setCustomerName,   
   startTime, setStartTime, 
   endTime, setEndTime,   
-  services, customers, setCustomers, isEditing 
+  services, customers, setCustomers, isEditing, selectedBooking
 }) {
-  const [selectedService, setSelectedService] = useState(Object.keys(services)[0])
-  const [calculatedPrice, setCalculatedPrice] = useState(0)
-  const [hours, setHours] = useState(0)
+  // ÄNDRING: Vi låter den lokala staten hållas synkad
+  const [tasks, setTasks] = useState([])
+  const [finalPrice, setFinalPrice] = useState(0)
+  const [calculatedEndTime, setCalculatedEndTime] = useState('')
 
-  // States för ny kund
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
   const [newCustomerPhone, setNewCustomerPhone] = useState('')
@@ -20,7 +21,6 @@ function BookingModal({
   const [newCustomerZip, setNewCustomerZip] = useState('')
   const [newCustomerCity, setNewCustomerCity] = useState('')
 
-  // States för att redigera en befintlig kund
   const [isEditingExistingCustomer, setIsEditingExistingCustomer] = useState(false)
   const [editPhone, setEditPhone] = useState('')
   const [editStreet, setEditStreet] = useState('')
@@ -28,6 +28,16 @@ function BookingModal({
   const [editCity, setEditCity] = useState('')
 
   const activeCustomer = customers[customerName]
+
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditing && selectedBooking?.extendedProps?.tasks) {
+        setTasks(JSON.parse(JSON.stringify(selectedBooking.extendedProps.tasks))) // Säker djupkopiering
+      } else {
+        setTasks([{ serviceKey: Object.keys(services)[0], minutes: 60, customPrice: '' }])
+      }
+    }
+  }, [isOpen, isEditing, selectedBooking, services])
 
   useEffect(() => {
     if (activeCustomer) {
@@ -50,17 +60,14 @@ function BookingModal({
     }
   }, [isOpen])
 
-  useEffect(() => {
-    if (startTime && endTime && services[selectedService]) {
-      const start = new Date(startTime)
-      const end = new Date(endTime)
-      const diffInMs = end - start
-      const diffInHours = diffInMs / (1000 * 60 * 60)
-      const finalHours = diffInHours > 0 ? diffInHours : 0
-      setHours(finalHours)
-      setCalculatedPrice(finalHours * services[selectedService].hourlyRate)
+  // VIKTIG FIX: Tar nu emot 'updatedTasks' och sparar ner till modaltillståndet så att det skickas rätt vid submit
+  const handleCalculationUpdate = useCallback((data) => {
+    setFinalPrice(data.calculatedPrice)
+    setCalculatedEndTime(data.calculatedEndTime)
+    if (data.updatedTasks) {
+      setTasks(data.updatedTasks)
     }
-  }, [startTime, endTime, selectedService, services])
+  }, [])
 
   if (!isOpen) return null
 
@@ -69,12 +76,10 @@ function BookingModal({
     return dateTimeStr.split('T')[1].substring(0, 5)
   }
 
-  const handleTimeChange = (newTimeStr, isStart) => {
-    const currentDateTimeStr = isStart ? startTime : endTime
-    if (!currentDateTimeStr) return
-    const updated = `${currentDateTimeStr.split('T')[0]}T${newTimeStr}:00`
-    if (isStart) setStartTime(updated)
-    else setEndTime(updated)
+  const handleStartTimeChange = (newTimeStr) => {
+    if (!startTime) return
+    const updated = `${startTime.split('T')[0]}T${newTimeStr}:00`
+    setStartTime(updated)
   }
 
   const handleUpdateCustomerDetails = () => {
@@ -97,12 +102,13 @@ function BookingModal({
         [finalCustomerId]: { name: newCustomerName, phone: newCustomerPhone, street: newCustomerStreet, zip: newCustomerZip, city: newCustomerCity }
       })
     }
-    onSave(e, services[selectedService].name, calculatedPrice, finalCustomerId)
+    // Nu är 'tasks' garanterat den korrekta, fullständiga listan!
+    onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime)
   }
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-      <div style={{ background: '#fff', padding: '25px', borderRadius: '8px', width: '430px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ background: '#fff', padding: '25px', borderRadius: '8px', width: '460px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', fontFamily: 'Arial, sans-serif' }}>
         <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #ecf0f1', paddingBottom: '10px' }}>
           {isEditing ? 'Hantera bokning ✏️' : 'Ny bokning 📅'}
         </h3>
@@ -126,7 +132,7 @@ function BookingModal({
             </select>
           </div>
 
-          {/* INFOBOX FÖR AKTIV KUND */}
+          {/* INFOBOX FÖR KUND */}
           {!isCreatingNewCustomer && activeCustomer && (
             <div style={{ background: '#f4f6f7', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px', borderLeft: '4px solid #7f8c8d' }}>
               {!isEditingExistingCustomer ? (
@@ -147,7 +153,7 @@ function BookingModal({
                     <input type="text" value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="Ort" style={{ flex: 2, padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7' }} />
                   </div>
                   <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                    <button type="button" onClick={handleUpdateCustomerDetails} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Spara ändring</button>
+                    <button type="button" onClick={handleUpdateCustomerDetails} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Spara</button>
                     <button type="button" onClick={() => setIsEditingExistingCustomer(false)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>Avbryt</button>
                   </div>
                 </div>
@@ -155,7 +161,7 @@ function BookingModal({
             </div>
           )}
 
-          {/* FORMULÄR FÖR NY KUND (Nu utbruten till en egen snygg komponent!) */}
+          {/* FORMULÄR FÖR NY KUND */}
           {isCreatingNewCustomer && (
             <CustomerForm 
               name={newCustomerName} setName={setNewCustomerName}
@@ -166,34 +172,22 @@ function BookingModal({
             />
           )}
 
-          {/* TIDSHANTERING */}
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Start:</label>
-              <input type="time" value={getTimeString(startTime)} onChange={(e) => handleTimeChange(e.target.value, true)} required style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '16px' }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Slut:</label>
-              <input type="time" value={getTimeString(endTime)} onChange={(e) => handleTimeChange(e.target.value, false)} required style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '16px' }} />
-            </div>
-          </div>
-
-          {/* VÄLJ TJÄNST */}
+          {/* STARTTID */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Välj tjänst:</label>
-            <select value={selectedService} onChange={(e) => setSelectedService(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #bdc3c7', background: '#fff' }}>
-              {Object.keys(services).map((key) => (
-                <option key={key} value={key}>{services[key].name} ({services[key].hourlyRate} kr/h)</option>
-              ))}
-            </select>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Bokningens starttid:</label>
+            <input type="time" value={getTimeString(startTime)} onChange={(e) => handleStartTimeChange(e.target.value)} required style={{ width: '40%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '16px' }} />
           </div>
 
-          {/* PRISPANEL */}
-          <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '6px', marginBottom: '20px', borderLeft: '4px solid #2ecc71' }}>
-            <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#7f8c8d' }}>Tidsåtgång: <strong>{hours.toFixed(1)} timmar</strong></p>
-            <p style={{ margin: '0 0 5px 0', fontSize: '16px', color: '#2c3e50' }}>Originalpris: <strong>{calculatedPrice.toFixed(0)} kr</strong></p>
-            <p style={{ margin: '0', fontSize: '18px', color: '#27ae60', fontWeight: 'bold' }}>Med RUT-avdrag (50%): { (calculatedPrice * 0.5).toFixed(0) } kr</p>
-          </div>
+          {/* MOMENT-FORMULÄRET */}
+          {isOpen && tasks.length > 0 && (
+            <TaskForm 
+              services={services}
+              tasks={tasks}
+              setTasks={setTasks}
+              startTime={startTime}
+              onCalculated={handleCalculationUpdate}
+            />
+          )}
 
           {/* KNAPPAR */}
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
@@ -203,7 +197,7 @@ function BookingModal({
                 <button type="button" onClick={onDelete} style={{ padding: '10px 15px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>🗑️</button>
               )}
               <button type="submit" style={{ padding: '10px 20px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                {isEditing ? 'Spara' : 'Boka pass'}
+                {isEditing ? 'Spara ändringar' : 'Boka pass'}
               </button>
             </div>
           </div>

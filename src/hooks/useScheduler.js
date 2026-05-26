@@ -55,35 +55,51 @@ export function useScheduler() {
     setBookings(updatedBookings)
   }
 
-  const handleSaveBooking = (e, serviceName, finalPrice, customerId) => {
-    e.preventDefault()
+  // UPPDATERAD: Tar nu emot calculatedEndTime som sitt femte argument!
+  const handleSaveBooking = (e, tasks, finalPrice, customerId, calculatedEndTime) => {
+    if (e) e.preventDefault()
     
     const currentCustomer = customers[customerId]
-    const displayTitle = currentCustomer ? `${currentCustomer.name} - ${serviceName}` : `Okänd - ${serviceName}`
+    
+    // Skapa en snygg titel baserad på alla valda tjänster
+    const serviceNames = tasks.map(t => services[t.serviceKey]?.name || 'Okänd').join(', ')
+    const displayTitle = currentCustomer ? `${currentCustomer.name} - ${serviceNames}` : `Okänd - ${serviceNames}`
     
     if (selectedBooking) {
+      // UPPDATERA BEFINTLIG BOKNING
       const updatedBookings = bookings.map(b => {
         if (b.id === selectedBooking.id) {
           return {
             ...b,
             title: displayTitle,
             start: selectedStart,
-            end: selectedEnd,
-            extendedProps: { customerId: customerId, price: finalPrice, rutPrice: finalPrice * 0.5 }
+            end: calculatedEndTime, // FIX: Här används nu den nya automatiska tiden!
+            extendedProps: { 
+              customerId, 
+              price: finalPrice, 
+              rutPrice: finalPrice * 0.5,
+              tasks 
+            }
           }
         }
         return b
       })
       setBookings(updatedBookings)
     } else {
+      // SKAPA EN HELT NY BOKNING
       const newBooking = {
         id: String(Date.now()),
         title: displayTitle,
         start: selectedStart,
-        end: selectedEnd,
+        end: calculatedEndTime, // FIX: Här används nu den nya automatiska tiden!
         backgroundColor: '#2ecc71',
         borderColor: '#27ae60',
-        extendedProps: { customerId: customerId, price: finalPrice, rutPrice: finalPrice * 0.5 }
+        extendedProps: { 
+          customerId, 
+          price: finalPrice, 
+          rutPrice: finalPrice * 0.5,
+          tasks 
+        }
       }
       setBookings([...bookings, newBooking])
     }

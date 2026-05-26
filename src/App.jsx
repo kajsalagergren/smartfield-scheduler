@@ -20,7 +20,7 @@ function App() {
           <p style={{ margin: '3px 0 0 0', color: '#7f8c8d', fontSize: '14px' }}>Smartare planering</p>
         </div>
         
-        {/* HÄR HAR VI LAGT TILL EN NY KNAPP FÖR KUNDER BREDVID INSTÄLLNINGAR */}
+        {/* KNAPP FÖR KUNDER BREDVID INSTÄLLNINGAR */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => s.setCustomerManagerOpen(true)} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
             Kunder 👥
@@ -52,9 +52,13 @@ function App() {
         />
       </div>
 
-      <AdminPanel isOpen={s.adminOpen} onClose={() => s.setAdminOpen(false)} services={s.services} setServices={setServices => s.setServices(services)} />
-
-      {/* NYTT: VÅR NYA KUNDREGISTER-POPUP */}
+      <AdminPanel 
+  isOpen={s.adminOpen} 
+  onClose={() => s.setAdminOpen(false)} 
+  services={s.services} 
+  setServices={s.setServices} // FIX: Skicka bara med s.setServices direkt!
+/>
+      {/* KUNDREGISTER-POPUP */}
       <CustomerManager 
         isOpen={s.customerManagerOpen} 
         onClose={() => s.setCustomerManagerOpen(false)} 
