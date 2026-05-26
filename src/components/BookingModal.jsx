@@ -1,21 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import CustomerForm from './CustomerForm'
 import TaskForm from './TaskForm'
+import RepeatForm from './RepeatForm'
 
 function BookingModal({ 
   isOpen, onClose, onSave, onDelete, 
   customerName, setCustomerName,   
   startTime, setStartTime, 
   endTime, setEndTime,   
-  services, customers, setCustomers, isEditing, selectedBooking
+  services, customers, setCustomers, isEditing, selectedBooking,
+  onCopyBooking
 }) {
   const [tasks, setTasks] = useState([])
   const [finalPrice, setFinalPrice] = useState(0)
   const [calculatedEndTime, setCalculatedEndTime] = useState('')
-  
-  // NYTT: States för kommentar och fakturering
   const [comment, setComment] = useState('')
   const [isInvoiced, setIsInvoiced] = useState(false)
+
+  const [repeatType, setRepeatType] = useState('none')
+  const [repeatCount, setRepeatCount] = useState(4)
+
+  const [copyDate, setCopyDate] = useState('')
+  const [copyTime, setCopyTime] = useState('') // FIX 1: Sparar den valda klontiden
+
+  const [showCopySection, setShowCopySection] = useState(false)
 
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
@@ -32,20 +40,31 @@ function BookingModal({
 
   const activeCustomer = customers[customerName]
 
-  // Synka när fönstret öppnas
+  const getTimeString = (dateTimeStr) => {
+    if (!dateTimeStr || typeof dateTimeStr !== 'string' || !dateTimeStr.includes('T')) {
+      return '00:00'
+    }
+    return dateTimeStr.split('T')[1].substring(0, 5)
+  }
+
   useEffect(() => {
     if (isOpen) {
+      setShowCopySection(false)
+      setCopyDate('')
+      setRepeatType('none')
+      setRepeatCount(4)
+      setCopyTime(getTimeString(startTime)) // Sätt starttid som grund för klonen direkt
       if (isEditing && selectedBooking) {
         setTasks(JSON.parse(JSON.stringify(selectedBooking.extendedProps?.tasks || [])))
-        setComment(selectedBooking.extendedProps?.comment || '')      // Läs in sparad kommentar
-        setIsInvoiced(selectedBooking.extendedProps?.isInvoiced || false) // Läs in sparad fakturastatus
+        setComment(selectedBooking.extendedProps?.comment || '')
+        setIsInvoiced(selectedBooking.extendedProps?.isInvoiced || false)
       } else {
         setTasks([{ serviceKey: Object.keys(services)[0], minutes: 60, customPrice: '' }])
         setComment('')
         setIsInvoiced(false)
       }
     }
-  }, [isOpen, isEditing, selectedBooking, services])
+  }, [isOpen, isEditing, selectedBooking, services, startTime])
 
   useEffect(() => {
     if (activeCustomer) {
@@ -75,13 +94,6 @@ function BookingModal({
 
   if (!isOpen) return null
 
-  const getTimeString = (dateTimeStr) => {
-    if (!dateTimeStr || typeof dateTimeStr !== 'string' || !dateTimeStr.includes('T')) {
-      return '00:00'
-    }
-    return dateTimeStr.split('T')[1].substring(0, 5)
-  }
-
   const handleStartTimeChange = (newTimeStr) => {
     if (!startTime || typeof startTime !== 'string') return
     const datePart = startTime.includes('T') ? startTime.split('T')[0] : startTime
@@ -98,6 +110,29 @@ function BookingModal({
     setIsEditingExistingCustomer(false)
   }
 
+  const handleDirectCopy = () => {
+    if (!copyDate || !copyTime) return
+    let finalCustomerId = customerName
+
+    if (isCreatingNewCustomer) {
+      finalCustomerId = 'customer_' + Date.now()
+      setCustomers({
+        ...customers,
+        [finalCustomerId]: { name: newCustomerName, phone: newCustomerPhone, street: newCustomerStreet, zip: newCustomerZip, city: newCustomerCity }
+      })
+    }
+
+    // FIX 2: Skickar med copyTime (tredje argumentet) till hooken!
+    onCopyBooking(copyDate, {
+      tasks,
+      finalPrice,
+      customerId: finalCustomerId,
+      startTime,
+      calculatedEndTime,
+      comment
+    }, copyTime)
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
     let finalCustomerId = customerName
@@ -109,8 +144,7 @@ function BookingModal({
         [finalCustomerId]: { name: newCustomerName, phone: newCustomerPhone, street: newCustomerStreet, zip: newCustomerZip, city: newCustomerCity }
       })
     }
-    // Skickar med comment och isInvoiced till sparfunktionen!
-    onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime, comment, isInvoiced)
+    onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime, comment, isInvoiced, repeatType, repeatCount)
   }
 
   return (
@@ -196,18 +230,26 @@ function BookingModal({
             />
           )}
 
-          {/* NYTT: INTERN KOMMENTAR-RUTA 📝 */}
+          {/* UPPREPNINGSKOMPONENT */}
+          <RepeatForm 
+            repeatType={repeatType}
+            setRepeatType={setRepeatType}
+            repeatCount={repeatCount}
+            setRepeatCount={setRepeatCount}
+          />
+
+          {/* INTERNAL KOMMENTAR-RUTA */}
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Kommentar / Anteckning:</label>
             <textarea 
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Ex: Nyckeln finns under krukan, hunden är snäll..."
+              placeholder="Ex: Nyckeln finns under krukan..."
               style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '14px', fontFamily: 'Arial, sans-serif', height: '60px', resize: 'vertical' }}
             />
           </div>
 
-          {/* NYTT: CHECKRUTA FÖR FAKTURERAD 🧾 */}
+          {/* CHECKRUTA FÖR FAKTURERAD */}
           <div style={{ marginBottom: '20px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <input 
               type="checkbox" 
@@ -219,6 +261,54 @@ function BookingModal({
             <label htmlFor="isInvoiced" style={{ fontWeight: 'bold', color: '#34495e', cursor: 'pointer', fontSize: '14px' }}>
               Markera som fakturerad ✅
             </label>
+          </div>
+
+          {/* KOPIERINGS-PANEL – UPPDATERAD MED TIDSMÄTARE 📋 */}
+          <div style={{ marginBottom: '20px', background: '#34495e', padding: '12px', borderRadius: '6px' }}>
+            {!showCopySection ? (
+              <button 
+                type="button" 
+                onClick={() => setShowCopySection(true)}
+                style={{ width: '100%', padding: '8px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+              >
+                📋 Snabba på: Kopiera detta pass till ett annat datum också...
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff' }}>Välj datum och starttid att direkt-klona detta till:</label>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  {/* Datumväljare */}
+                  <input 
+                    type="date" 
+                    value={copyDate}
+                    onChange={(e) => setCopyDate(e.target.value)}
+                    style={{ flex: 2, padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', background: '#fff' }}
+                  />
+                  {/* Tidväljare för kopian! */}
+                  <input 
+                    type="time" 
+                    value={copyTime}
+                    onChange={(e) => setCopyTime(e.target.value)}
+                    style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', background: '#fff' }}
+                  />
+                  <button 
+                    type="button" 
+                    disabled={!copyDate || !copyTime}
+                    onClick={handleDirectCopy}
+                    style={{ padding: '6px 12px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: (copyDate && copyTime) ? 'pointer' : 'not-allowed' }}
+                  >
+                    Klona!
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowCopySection(false)}
+                    style={{ padding: '6px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* KNAPPAR */}

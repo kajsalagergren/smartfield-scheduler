@@ -83,6 +83,7 @@ function App() {
         setCustomers={s.setCustomers}         
         isEditing={!!s.selectedBooking}
         selectedBooking={s.selectedBooking}
+        onCopyBooking={s.handleCopyBooking}
       />
     </div>
   )
