@@ -55,15 +55,24 @@ export function useScheduler() {
     setBookings(updatedBookings)
   }
 
-  // UPPDATERAD: Tar nu emot calculatedEndTime som sitt femte argument!
-  const handleSaveBooking = (e, tasks, finalPrice, customerId, calculatedEndTime) => {
+  // UPPDATERAD: Tar nu även emot 'comment' och 'isInvoiced' i slutet!
+  const handleSaveBooking = (e, tasks, finalPrice, customerId, calculatedEndTime, comment, isInvoiced) => {
     if (e) e.preventDefault()
     
     const currentCustomer = customers[customerId]
     
     // Skapa en snygg titel baserad på alla valda tjänster
     const serviceNames = tasks.map(t => services[t.serviceKey]?.name || 'Okänd').join(', ')
-    const displayTitle = currentCustomer ? `${currentCustomer.name} - ${serviceNames}` : `Okänd - ${serviceNames}`
+    
+    // Om den är fakturerad lägger vi till en liten bock i kalendertiteln!
+    const invoiceEmoji = isInvoiced ? '✅ ' : ''
+    const displayTitle = currentCustomer 
+      ? `${invoiceEmoji}${currentCustomer.name} - ${serviceNames}` 
+      : `${invoiceEmoji}Okänd - ${serviceNames}`
+    
+    // NYTT: Bestäm färg automatiskt – gråblå (#94a3b8) om fakturerad, annars grön
+    const backgroundColor = isInvoiced ? '#94a3b8' : '#2ecc71'
+    const borderColor = isInvoiced ? '#64748b' : '#27ae60'
     
     if (selectedBooking) {
       // UPPDATERA BEFINTLIG BOKNING
@@ -73,12 +82,16 @@ export function useScheduler() {
             ...b,
             title: displayTitle,
             start: selectedStart,
-            end: calculatedEndTime, // FIX: Här används nu den nya automatiska tiden!
+            end: calculatedEndTime,
+            backgroundColor, // Uppdaterar färg live
+            borderColor,     // Uppdaterar kantfärg live
             extendedProps: { 
               customerId, 
               price: finalPrice, 
               rutPrice: finalPrice * 0.5,
-              tasks 
+              tasks,
+              comment,       // Sparar kommentaren i datan
+              isInvoiced     // Sparar fakturastatusen i datan
             }
           }
         }
@@ -91,14 +104,16 @@ export function useScheduler() {
         id: String(Date.now()),
         title: displayTitle,
         start: selectedStart,
-        end: calculatedEndTime, // FIX: Här används nu den nya automatiska tiden!
-        backgroundColor: '#2ecc71',
-        borderColor: '#27ae60',
+        end: calculatedEndTime,
+        backgroundColor, // Sätter färg direkt
+        borderColor,     // Sätter kantfärg direkt
         extendedProps: { 
           customerId, 
           price: finalPrice, 
           rutPrice: finalPrice * 0.5,
-          tasks 
+          tasks,
+          comment,       // Sparar kommentaren i datan
+          isInvoiced     // Sparar fakturastatusen i datan
         }
       }
       setBookings([...bookings, newBooking])

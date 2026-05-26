@@ -82,6 +82,7 @@ function App() {
         customers={s.customers}               
         setCustomers={s.setCustomers}         
         isEditing={!!s.selectedBooking}
+        selectedBooking={s.selectedBooking}
       />
     </div>
   )

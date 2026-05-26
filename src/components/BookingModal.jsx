@@ -9,10 +9,13 @@ function BookingModal({
   endTime, setEndTime,   
   services, customers, setCustomers, isEditing, selectedBooking
 }) {
-  // ÄNDRING: Vi låter den lokala staten hållas synkad
   const [tasks, setTasks] = useState([])
   const [finalPrice, setFinalPrice] = useState(0)
   const [calculatedEndTime, setCalculatedEndTime] = useState('')
+  
+  // NYTT: States för kommentar och fakturering
+  const [comment, setComment] = useState('')
+  const [isInvoiced, setIsInvoiced] = useState(false)
 
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
@@ -29,12 +32,17 @@ function BookingModal({
 
   const activeCustomer = customers[customerName]
 
+  // Synka när fönstret öppnas
   useEffect(() => {
     if (isOpen) {
-      if (isEditing && selectedBooking?.extendedProps?.tasks) {
-        setTasks(JSON.parse(JSON.stringify(selectedBooking.extendedProps.tasks))) // Säker djupkopiering
+      if (isEditing && selectedBooking) {
+        setTasks(JSON.parse(JSON.stringify(selectedBooking.extendedProps?.tasks || [])))
+        setComment(selectedBooking.extendedProps?.comment || '')      // Läs in sparad kommentar
+        setIsInvoiced(selectedBooking.extendedProps?.isInvoiced || false) // Läs in sparad fakturastatus
       } else {
         setTasks([{ serviceKey: Object.keys(services)[0], minutes: 60, customPrice: '' }])
+        setComment('')
+        setIsInvoiced(false)
       }
     }
   }, [isOpen, isEditing, selectedBooking, services])
@@ -60,25 +68,24 @@ function BookingModal({
     }
   }, [isOpen])
 
-  // VIKTIG FIX: Tar nu emot 'updatedTasks' och sparar ner till modaltillståndet så att det skickas rätt vid submit
   const handleCalculationUpdate = useCallback((data) => {
     setFinalPrice(data.calculatedPrice)
     setCalculatedEndTime(data.calculatedEndTime)
-    if (data.updatedTasks) {
-      setTasks(data.updatedTasks)
-    }
   }, [])
 
   if (!isOpen) return null
 
   const getTimeString = (dateTimeStr) => {
-    if (!dateTimeStr || !dateTimeStr.includes('T')) return '00:00'
+    if (!dateTimeStr || typeof dateTimeStr !== 'string' || !dateTimeStr.includes('T')) {
+      return '00:00'
+    }
     return dateTimeStr.split('T')[1].substring(0, 5)
   }
 
   const handleStartTimeChange = (newTimeStr) => {
-    if (!startTime) return
-    const updated = `${startTime.split('T')[0]}T${newTimeStr}:00`
+    if (!startTime || typeof startTime !== 'string') return
+    const datePart = startTime.includes('T') ? startTime.split('T')[0] : startTime
+    const updated = `${datePart}T${newTimeStr}:00`
     setStartTime(updated)
   }
 
@@ -102,8 +109,8 @@ function BookingModal({
         [finalCustomerId]: { name: newCustomerName, phone: newCustomerPhone, street: newCustomerStreet, zip: newCustomerZip, city: newCustomerCity }
       })
     }
-    // Nu är 'tasks' garanterat den korrekta, fullständiga listan!
-    onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime)
+    // Skickar med comment och isInvoiced till sparfunktionen!
+    onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime, comment, isInvoiced)
   }
 
   return (
@@ -179,7 +186,7 @@ function BookingModal({
           </div>
 
           {/* MOMENT-FORMULÄRET */}
-          {isOpen && tasks.length > 0 && (
+          {isOpen && tasks.length > 0 && typeof startTime === 'string' && (
             <TaskForm 
               services={services}
               tasks={tasks}
@@ -188,6 +195,31 @@ function BookingModal({
               onCalculated={handleCalculationUpdate}
             />
           )}
+
+          {/* NYTT: INTERN KOMMENTAR-RUTA 📝 */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#34495e' }}>Kommentar / Anteckning:</label>
+            <textarea 
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Ex: Nyckeln finns under krukan, hunden är snäll..."
+              style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '14px', fontFamily: 'Arial, sans-serif', height: '60px', resize: 'vertical' }}
+            />
+          </div>
+
+          {/* NYTT: CHECKRUTA FÖR FAKTURERAD 🧾 */}
+          <div style={{ marginBottom: '20px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input 
+              type="checkbox" 
+              id="isInvoiced"
+              checked={isInvoiced}
+              onChange={(e) => setIsInvoiced(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <label htmlFor="isInvoiced" style={{ fontWeight: 'bold', color: '#34495e', cursor: 'pointer', fontSize: '14px' }}>
+              Markera som fakturerad ✅
+            </label>
+          </div>
 
           {/* KNAPPAR */}
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
