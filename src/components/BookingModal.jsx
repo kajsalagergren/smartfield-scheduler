@@ -21,8 +21,7 @@ function BookingModal({
   const [repeatCount, setRepeatCount] = useState(4)
 
   const [copyDate, setCopyDate] = useState('')
-  const [copyTime, setCopyTime] = useState('') // FIX 1: Sparar den valda klontiden
-
+  const [copyTime, setCopyTime] = useState('') // GÅRDAGENS FIX: Håller koll på klontiden
   const [showCopySection, setShowCopySection] = useState(false)
 
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false)
@@ -53,7 +52,7 @@ function BookingModal({
       setCopyDate('')
       setRepeatType('none')
       setRepeatCount(4)
-      setCopyTime(getTimeString(startTime)) // Sätt starttid som grund för klonen direkt
+      setCopyTime(getTimeString(startTime)) // GÅRDAGENS FIX: Sätt nuvarande tid som grund för klonen
       if (isEditing && selectedBooking) {
         setTasks(JSON.parse(JSON.stringify(selectedBooking.extendedProps?.tasks || [])))
         setComment(selectedBooking.extendedProps?.comment || '')
@@ -122,7 +121,7 @@ function BookingModal({
       })
     }
 
-    // FIX 2: Skickar med copyTime (tredje argumentet) till hooken!
+    // GÅRDAGENS FIX: Skickar med copyTime (tredje argumentet)
     onCopyBooking(copyDate, {
       tasks,
       finalPrice,
@@ -147,6 +146,12 @@ function BookingModal({
     onSave(e, tasks, finalPrice, finalCustomerId, calculatedEndTime, comment, isInvoiced, repeatType, repeatCount)
   }
 
+  // DAGENS FIX: Hämtar ut restidsdatan från bokningen
+  const travelBefore = selectedBooking?.extendedProps?.travelMinutesBefore
+  const travelLabelBefore = selectedBooking?.extendedProps?.travelLabelBefore || 'Hemmet'
+  const travelAfter = selectedBooking?.extendedProps?.travelMinutesAfter
+  const travelLabelAfter = selectedBooking?.extendedProps?.travelLabelAfter || 'Hemmet'
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
       <div style={{ background: '#fff', padding: '25px', borderRadius: '8px', width: '460px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', fontFamily: 'Arial, sans-serif' }}>
@@ -154,6 +159,15 @@ function BookingModal({
           {isEditing ? 'Hantera bokning ✏️' : 'Ny bokning 📅'}
         </h3>
         
+        {/* DAGENS FIX: Restids-info helt utan att störa din design */}
+        {isEditing && ((travelBefore && travelBefore > 0) || (travelAfter && travelAfter > 0)) && (
+          <div style={{ background: '#fff9db', border: '1px solid #ffe066', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '13px', color: '#856404' }}>
+            <strong>🚗 Beräknade körtider:</strong>
+            {travelBefore > 0 && <div style={{ marginTop: '4px' }}>• Körtid hit: {travelBefore} min (från {travelLabelBefore})</div>}
+            {travelAfter > 0 && <div style={{ marginTop: '2px' }}>• Körtid efteråt: {travelAfter} min (till {travelLabelAfter})</div>}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           {/* KUNDVÄLJARE */}
           <div style={{ marginBottom: '15px' }}>
@@ -263,7 +277,7 @@ function BookingModal({
             </label>
           </div>
 
-          {/* KOPIERINGS-PANEL – UPPDATERAD MED TIDSMÄTARE 📋 */}
+          {/* KOPIERINGS-PANEL – NU MED BÅDE DATUM OCH TID IGEN 📋 */}
           <div style={{ marginBottom: '20px', background: '#34495e', padding: '12px', borderRadius: '6px' }}>
             {!showCopySection ? (
               <button 
@@ -275,7 +289,7 @@ function BookingModal({
               </button>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff' }}>Välj datum och starttid att direkt-klona detta till:</label>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff' }}>Välj datum och tid att direkt-klona detta till:</label>
                 <div style={{ display: 'flex', gap: '5px' }}>
                   {/* Datumväljare */}
                   <input 
@@ -284,7 +298,7 @@ function BookingModal({
                     onChange={(e) => setCopyDate(e.target.value)}
                     style={{ flex: 2, padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', background: '#fff' }}
                   />
-                  {/* Tidväljare för kopian! */}
+                  {/* GÅRDAGENS FIX: Tidväljare för kopian */}
                   <input 
                     type="time" 
                     value={copyTime}

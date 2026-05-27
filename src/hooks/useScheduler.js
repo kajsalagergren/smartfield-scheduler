@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DEFAULT_SERVICES } from '../constants/services'
 import { DEFAULT_CUSTOMERS } from '../constants/customers'
 
@@ -13,6 +13,15 @@ export function useScheduler() {
   const [bookings, setBookings] = useState([])
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [customers, setCustomers] = useState(DEFAULT_CUSTOMERS)
+  
+  const [homeStreet, setHomeStreet] = useState('Åsgatan 1')
+  const [homeZip, setHomeZip] = useState('791 71')
+  const [homeCity, setHomeCity] = useState('Falun')
+
+  const [travelCache, setTravelCache] = useState({})
+
+  const pad = (num) => String(num).padStart(2, '0')
+  const format = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 
   const handleDateSelect = (selectInfo) => {
     setSelectedBooking(null)
@@ -55,22 +64,146 @@ export function useScheduler() {
     setBookings(updatedBookings)
   }
 
-  const pad = (num) => String(num).padStart(2, '0')
-  const format = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const fetchRealTravelTime = async (fromAddr, toAddr, cacheKey) => {
+    if (!fromAddr || !toAddr || fromAddr.trim() === toAddr.trim()) return 0
 
-// UPPDATERAD IGEN: Nu kan man även styra klockslaget för den klonade bokningen!
+    try {
+      const resFrom = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fromAddr)}&limit=1`)
+      const dataFrom = await resFrom.json()
+      
+      const resTo = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(toAddr)}&limit=1`)
+      const dataTo = await resTo.json()
+
+      if (dataFrom.length > 0 && dataTo.length > 0) {
+        const lon1 = dataFrom[0].lon
+        const lat1 = dataFrom[0].lat
+        const lon2 = dataTo[0].lon
+        const lat2 = dataTo[0].lat
+
+        const routeRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`)
+        const routeData = await routeRes.json()
+
+        if (routeData.routes && routeData.routes.length > 0) {
+          const durationSeconds = routeData.routes[0].duration
+          const durationMinutes = Math.round(durationSeconds / 60)
+          
+          setTravelCache(prev => ({ ...prev, [cacheKey]: durationMinutes }))
+          return durationMinutes
+        }
+      }
+    } catch (error) {
+      console.error("Kunde inte hämta äkta restid från kartan:", error)
+    }
+    return 15
+  }
+
+  const getCustomerFullAddress = (customerId) => {
+    const c = customers[customerId]
+    if (!c || !c.street) return ''
+    return `${c.street}, ${c.zip} ${c.city}`
+  }
+
+  const getHomeFullAddress = () => {
+    if (!homeStreet) return ''
+    return `${homeStreet}, ${homeZip || ''} ${homeCity || ''}`
+  }
+
+  useEffect(() => {
+    const injectTravelTimes = async () => {
+      if (bookings.length === 0) return
+
+      const pureBookings = bookings.filter(b => !b.extendedProps?.isTravel)
+      const sorted = [...pureBookings].sort((a, b) => new Date(a.start) - new Date(b.start))
+      const actualHomeAddress = getHomeFullAddress()
+      let hasChanged = false
+
+      const updatedBookings = await Promise.all(sorted.map(async (booking, index) => {
+        const currentStart = new Date(booking.start)
+        const currentEnd = new Date(booking.end)
+        const currentAddr = getCustomerFullAddress(booking.extendedProps?.customerId)
+
+        const prevBooking = sorted[index - 1]
+        let fromAddr = actualHomeAddress
+        let labelBefore = 'Hemmet'
+
+        if (prevBooking) {
+          const prevEnd = new Date(prevBooking.end)
+          const diff = (currentStart - prevEnd) / (1000 * 60)
+          const isSameDay = currentStart.toDateString() === prevEnd.toDateString()
+
+          if (isSameDay && diff >= 0 && diff <= 60) {
+            fromAddr = getCustomerFullAddress(prevBooking.extendedProps?.customerId)
+            labelBefore = customers[prevBooking.extendedProps?.customerId]?.name || 'Förra kunden'
+          }
+        }
+
+        const cacheKeyBefore = `${fromAddr}_to_${currentAddr}`
+        let minutesBefore = travelCache[cacheKeyBefore]
+        if (minutesBefore === undefined) {
+          minutesBefore = await fetchRealTravelTime(fromAddr, currentAddr, cacheKeyBefore)
+        }
+
+        const nextBooking = sorted[index + 1]
+        let toAddrAfter = actualHomeAddress
+        let labelAfter = 'Hemmet'
+
+        if (nextBooking) {
+          const nextStart = new Date(nextBooking.start)
+          const diff = (nextStart - currentEnd) / (1000 * 60)
+          const isSameDay = currentEnd.toDateString() === nextStart.toDateString()
+
+          if (isSameDay && diff >= 0 && diff <= 60) {
+            toAddrAfter = getCustomerFullAddress(nextBooking.extendedProps?.customerId)
+            labelAfter = customers[nextBooking.extendedProps?.customerId]?.name || 'Nästa kund'
+          }
+        }
+
+        const cacheKeyAfter = `${currentAddr}_to_${toAddrAfter}`
+        let minutesAfter = travelCache[cacheKeyAfter]
+        if (minutesAfter === undefined) {
+          minutesAfter = await fetchRealTravelTime(currentAddr, toAddrAfter, cacheKeyAfter)
+        }
+
+        const oldBefore = booking.extendedProps?.travelMinutesBefore
+        const oldAfter = booking.extendedProps?.travelMinutesAfter
+        const oldLabelB = booking.extendedProps?.travelLabelBefore
+        const oldLabelA = booking.extendedProps?.travelLabelAfter
+
+        if (oldBefore !== minutesBefore || oldAfter !== minutesAfter || oldLabelB !== labelBefore || oldLabelA !== labelAfter) {
+          hasChanged = true
+        }
+
+        return {
+          ...booking,
+          extendedProps: {
+            ...booking.extendedProps,
+            travelMinutesBefore: minutesBefore,
+            travelLabelBefore: labelBefore,
+            travelMinutesAfter: minutesAfter,
+            travelLabelAfter: labelAfter
+          }
+        }
+      }))
+
+      if (hasChanged) {
+        setBookings(updatedBookings)
+      }
+    }
+
+    injectTravelTimes()
+  }, [bookings, homeStreet, homeZip, homeCity, travelCache])
+
   const handleCopyBooking = (targetDateStr, directData = null, chosenTime = null) => {
     if (!targetDateStr) return
 
     let sourceTasks = []
     let sourceCustomerId = ''
     let sourceComment = ''
-    let durationMs = 60 * 60 * 1000 // Standard 1 timme
+    let durationMs = 60 * 60 * 1000
     let sourceHours = 8, sourceMinutes = 0
     let currentBookingsList = [...bookings]
 
     if (directData) {
-      // SCENARIO 1: Direkt-kloning från fönstret
       sourceTasks = directData.tasks
       sourceCustomerId = directData.customerId
       sourceComment = directData.comment
@@ -80,7 +213,6 @@ export function useScheduler() {
       sourceHours = d.getHours()
       sourceMinutes = d.getMinutes()
 
-      // --- Spara originalpasset först ---
       const currentCustomer = customers[sourceCustomerId]
       const serviceNames = sourceTasks.map(t => services[t.serviceKey]?.name || 'Okänd').join(', ')
       const displayTitleOriginal = currentCustomer ? `${currentCustomer.name} - ${serviceNames}` : `Okänd - ${serviceNames}`
@@ -110,7 +242,6 @@ export function useScheduler() {
         })
       }
     } else if (selectedBooking) {
-      // SCENARIO 2: Kloning av redan sparat pass
       sourceTasks = selectedBooking.extendedProps.tasks
       sourceCustomerId = selectedBooking.extendedProps.customerId
       sourceComment = selectedBooking.extendedProps.comment
@@ -121,18 +252,15 @@ export function useScheduler() {
       sourceMinutes = d.getMinutes()
     }
 
-    // --- Bestäm klockslag för kopian ---
     let cloneHours = sourceHours
     let cloneMinutes = sourceMinutes
 
-    // Om svärfar har valt en specifik tid i den nya rutan, så tolkar vi den ("HH:MM")
     if (chosenTime && chosenTime.includes(':')) {
       const parts = chosenTime.split(':')
       cloneHours = parseInt(parts[0], 10)
       cloneMinutes = parseInt(parts[1], 10)
     }
 
-    // --- Skapa kopian på det nya måldatumet med det valda klockslaget ---
     const currentCustomer = customers[sourceCustomerId]
     const serviceNames = sourceTasks.map(t => services[t.serviceKey]?.name || 'Okänd').join(', ')
     const displayTitleClone = currentCustomer ? `${currentCustomer.name} - ${serviceNames}` : `Okänd - ${serviceNames}`
@@ -163,7 +291,6 @@ export function useScheduler() {
     setSelectedBooking(null)
   }
 
-  // UPPDATERAD: Skapar serier oavsett om det är en ny bokning eller om man uppdaterar en gammal!
   const handleSaveBooking = (e, tasks, finalPrice, customerId, calculatedEndTime, comment, isInvoiced, repeatType = 'none', repeatCount = 4) => {
     if (e) e.preventDefault()
     
@@ -179,7 +306,6 @@ export function useScheduler() {
     let updatedBookings = [...bookings]
 
     if (selectedBooking) {
-      // 1. Uppdatera det aktuella passet först
       updatedBookings = bookings.map(b => {
         if (b.id === selectedBooking.id) {
           return {
@@ -189,13 +315,12 @@ export function useScheduler() {
             end: calculatedEndTime,
             backgroundColor,
             borderColor,
-            extendedProps: { customerId, price: finalPrice, rutPrice: finalPrice * 0.5, tasks, comment, isInvoiced }
+            extendedProps: { ...b.extendedProps, customerId, price: finalPrice, rutPrice: finalPrice * 0.5, tasks, comment, isInvoiced }
           }
         }
         return b
       })
     } else {
-      // Skapa det första passet om det är helt nytt
       updatedBookings.push({
         id: String(Date.now()),
         title: displayTitle,
@@ -207,12 +332,9 @@ export function useScheduler() {
       })
     }
 
-    // 2. Om användaren dessutom valde en upprepning, spottar vi ut EXTRA framtida pass!
     if (repeatType !== 'none') {
-      const extraPassesCount = selectedBooking ? repeatCount - 1 : repeatCount - 1
-      const startLoopIndex = 1
-
-      for (let i = startLoopIndex; i <= extraPassesCount; i++) {
+      const extraPassesCount = repeatCount - 1
+      for (let i = 1; i <= extraPassesCount; i++) {
         const loopStart = new Date(baseStart.getTime())
         
         if (repeatType === 'weekly') {
@@ -230,16 +352,9 @@ export function useScheduler() {
           title: displayTitle,
           start: format(loopStart),
           end: format(loopEnd),
-          backgroundColor: '#2ecc71', // Framtida pass startar som ofakturerade (gröna)
+          backgroundColor: '#2ecc71',
           borderColor: '#27ae60',
-          extendedProps: { 
-            customerId, 
-            price: finalPrice, 
-            rutPrice: finalPrice * 0.5, 
-            tasks: JSON.parse(JSON.stringify(tasks)), 
-            comment, 
-            isInvoiced: false 
-          }
+          extendedProps: { customerId: customerId, price: finalPrice, rutPrice: finalPrice * 0.5, tasks: JSON.parse(JSON.stringify(tasks)), comment, isInvoiced: false }
         })
       }
     }
@@ -283,6 +398,9 @@ export function useScheduler() {
     bookings,
     selectedBooking, setSelectedBooking,
     customers, setCustomers,
+    homeStreet, setHomeStreet,
+    homeZip, setHomeZip,
+    homeCity, setHomeCity,
     handleDateSelect,
     handleEventClick,
     handleEventDrop,

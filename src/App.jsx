@@ -5,7 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import BookingModal from './components/BookingModal'
 import AdminPanel from './components/AdminPanel'
-import CustomerManager from './components/CustomerManager' // NYTT
+import CustomerManager from './components/CustomerManager'
 
 import { useScheduler } from './hooks/useScheduler'
 
@@ -20,7 +20,6 @@ function App() {
           <p style={{ margin: '3px 0 0 0', color: '#7f8c8d', fontSize: '14px' }}>Smartare planering</p>
         </div>
         
-        {/* KNAPP FÖR KUNDER BREDVID INSTÄLLNINGAR */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => s.setCustomerManagerOpen(true)} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
             Kunder 👥
@@ -44,7 +43,7 @@ function App() {
           selectable={true}
           firstDay={1}
           select={s.handleDateSelect}
-          eventClick={s.handleEventClick}
+          eventClick={s.handleEventClick} // UPPDATERAT: Enkelt klick på alla synliga bokningar
           eventDrop={s.handleEventDrop}     
           eventResize={s.handleEventResize} 
           events={s.bookings}
@@ -53,12 +52,18 @@ function App() {
       </div>
 
       <AdminPanel 
-  isOpen={s.adminOpen} 
-  onClose={() => s.setAdminOpen(false)} 
-  services={s.services} 
-  setServices={s.setServices} // FIX: Skicka bara med s.setServices direkt!
-/>
-      {/* KUNDREGISTER-POPUP */}
+        isOpen={s.adminOpen} 
+        onClose={() => s.setAdminOpen(false)} 
+        services={s.services} 
+        setServices={s.setServices}
+        homeStreet={s.homeStreet}
+        setHomeStreet={s.setHomeStreet}
+        homeZip={s.homeZip}
+        setHomeZip={s.setHomeZip}
+        homeCity={s.homeCity}
+        setHomeCity={s.setHomeCity}
+      />
+
       <CustomerManager 
         isOpen={s.customerManagerOpen} 
         onClose={() => s.setCustomerManagerOpen(false)} 
@@ -72,7 +77,7 @@ function App() {
         onClose={() => { s.setModalOpen(false); s.setSelectedBooking(null); }}
         onSave={s.handleSaveBooking}
         onDelete={s.handleDeleteBooking}
-        customerName={s.customerName}       
+        customerName={s.customerName}      
         setCustomerName={s.setCustomerName}   
         startTime={s.selectedStart}
         setStartTime={s.setSelectedStart} 

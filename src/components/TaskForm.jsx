@@ -4,7 +4,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
   const [totalMinutes, setTotalMinutes] = useState(0)
   const [calculatedPrice, setCalculatedPrice] = useState(0)
 
-  // MATEMATIK-MOTORN: Räknar ut total tid, sluttid och pris live!
   useEffect(() => {
     if (startTime && tasks.length > 0) {
       let totalMin = 0
@@ -14,11 +13,11 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
         const min = Number(task.minutes) || 0
         totalMin += min
 
-        // Om användaren har skrivit in ett manuellt pris, använd det. Annars räkna ut baserat på timpris.
         if (task.customPrice !== undefined && task.customPrice !== '') {
           totalCost += Number(task.customPrice) || 0
         } else {
-          const hourlyRate = services[task.serviceKey]?.hourlyRate || 0
+          // FIX: Ändrat från hourlyRate till pricePerHour så den läser rätt från AdminPanelen!
+          const hourlyRate = services[task.serviceKey]?.pricePerHour || 0
           totalCost += (min / 60) * hourlyRate
         }
       });
@@ -26,14 +25,12 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
       setTotalMinutes(totalMin)
       setCalculatedPrice(totalCost)
 
-      // Räkna ut ny sluttid automatiskt
       const startDate = new Date(startTime)
       const endDate = new Date(startDate.getTime() + totalMin * 60 * 1000)
       
       const pad = (num) => String(num).padStart(2, '0')
       const formattedEndTime = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`
       
-      // VIKTIGT: Vi skickar med 'tasks' härifrån så att BookingModal alltid har den senaste datan!
       onCalculated({
         totalMinutes: totalMin,
         calculatedPrice: totalCost,
@@ -46,7 +43,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
   const handleTaskChange = (index, field, value) => {
     const updatedTasks = [...tasks]
     
-    // Om vi byter tjänst nollställer vi det manuella priset så att det nya timpriset kickar in
     if (field === 'serviceKey') {
       updatedTasks[index].customPrice = ''
     }
@@ -65,23 +61,22 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
     setTasks(updatedTasks)
   }
 
-  // Hjälpfunktion för att visa vad det ordinarie priset skulle ha varit på raden
   const getSuggestedPrice = (task) => {
     const min = Number(task.minutes) || 0
-    const hourlyRate = services[task.serviceKey]?.hourlyRate || 0
+    // FIX: Ändrat från hourlyRate till pricePerHour här med!
+    const hourlyRate = services[task.serviceKey]?.pricePerHour || 0
     return ((min / 60) * hourlyRate).toFixed(0)
   }
 
   return (
     <div style={{ marginBottom: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-      <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#2c3e50' }}>
+      <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#34495e' }}>
         Arbetsmoment, tid & pris:
       </label>
       
       {tasks.map((task, index) => (
         <div key={index} style={{ background: '#fcfcfc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '6px', marginBottom: '10px' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '5px' }}>
-            {/* Tjänst */}
             <select 
               value={task.serviceKey} 
               onChange={(e) => handleTaskChange(index, 'serviceKey', e.target.value)}
@@ -92,7 +87,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
               ))}
             </select>
 
-            {/* Ta bort-knapp */}
             <button 
               type="button" 
               onClick={() => removeTaskRow(index)}
@@ -104,7 +98,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
           </div>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {/* Tid */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ fontSize: '12px', color: '#7f8c8d' }}>Tid:</span>
               <input 
@@ -119,7 +112,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
               <span style={{ fontSize: '12px', color: '#7f8c8d' }}>min</span>
             </div>
 
-            {/* Justerbart Pris */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ fontSize: '12px', color: '#7f8c8d' }}>Pris:</span>
               <input 
@@ -148,7 +140,6 @@ function TaskForm({ services, tasks, setTasks, startTime, onCalculated }) {
         + Lägg till moment
       </button>
 
-      {/* PRISPANEL */}
       <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '6px', marginTop: '20px', borderLeft: '4px solid #2ecc71' }}>
         <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#7f8c8d' }}>
           Total tidsåtgång: <strong>{Math.floor(totalMinutes / 60)}h {totalMinutes % 60}min</strong> ({ (totalMinutes / 60).toFixed(1) } timmar)
